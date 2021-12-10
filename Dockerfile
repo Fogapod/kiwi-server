@@ -40,6 +40,6 @@ WORKDIR /app
 
 # TODO: user
 
-EXPOSE 8000
+EXPOSE 8001
 
 ENTRYPOINT ["/bin/dumb-init", "--", "kiwi-server"]
