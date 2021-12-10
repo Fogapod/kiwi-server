@@ -1,0 +1,67 @@
+cargo-features = ["strip"]
+
+[package]
+name = "kiwi-server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+error_reporting = ["sentry", "sentry-actix"]
+color = ["env_logger/termcolor"]
+
+[dependencies]
+# core dependencies
+actix-service = "2.0"
+dotenv = "0.15.0"
+# extra dependecies
+rand = "0.8"
+
+# core dependencies
+[dependencies.actix-web]
+version = "4.0.0-beta"
+default-features = false
+
+[dependencies.actix-rt]
+version = "2.5"
+
+[dependencies.sentry]
+version = "0.23"
+optional = true
+default-features = false
+features = ["backtrace", "contexts", "panic", "reqwest", "rustls"]
+
+[dependencies.sentry-actix]
+# https://github.com/getsentry/sentry-rust/pull/316
+git = "https://github.com/slickbench/sentry-rust"
+branch = "update-actix"
+optional = true
+
+[dependencies.log]
+version = "0.4"
+features = ["release_max_level_info"]
+
+[dependencies.env_logger]
+version = "0.9"
+default_features = false
+features = ["atty", "humantime"]
+
+# extra dependencies
+[dependencies.image]
+version = "0.23.14"
+#default-features = false
+#features = ["png", "jpeg"]
+
+[dependencies.imageproc]
+version = "0.22.0"
+default-features = false
+
+[dependencies.rusttype]
+version = "0.9.2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true
+panic = 'abort'
