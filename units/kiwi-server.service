@@ -11,7 +11,7 @@ Environment="IMAGE=fogapod/kiwi-server"
 Restart=on-failure
 TimeoutStopSec=70
 ExecStartPre=/bin/rm -f %t/container-kiwi-server.service.pid %t/container-kiwi-server.service.ctr-id
-ExecStart=/usr/bin/podman run --conmon-pidfile %t/container-kiwi-server.service.pid --cidfile %t/container-kiwi-server.service.ctr-id --cgroups=no-conmon --label "io.containers.autoupdate=registry" -d --replace --name %n --rm -p 8001:8001 -v ${PWD}/.env:/app/.env:U --hostname kiwi_server_prod $IMAGE
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/container-kiwi-server.service.pid --cidfile %t/container-kiwi-server.service.ctr-id --cgroups=no-conmon --label "io.containers.autoupdate=registry" -d --replace --name %n --rm -p 8001:8001 -v ${PWD}/.env:/app/.env:U -v ${PWD}/assets:/app/assets --hostname kiwi_server_prod $IMAGE
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/container-kiwi-server.service.ctr-id -t 10
 ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/container-kiwi-server.service.ctr-id
 PIDFile=%t/container-kiwi-server.service.pid
