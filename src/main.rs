@@ -37,7 +37,7 @@ async fn main() -> std::io::Result<()> {
             ))
             .configure(routes::config)
     })
-    .bind("0.0.0.0:8000")?
+    .bind("0.0.0.0:8001")?
     .run();
 
     server.await
