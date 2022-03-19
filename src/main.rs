@@ -1,12 +1,14 @@
+mod auth;
+mod errors;
 mod routes;
-use std::env;
 
+use actix_web::{middleware, web, App, HttpServer, ResponseError};
+use errors::ServiceError;
+use std::env;
 #[cfg(not(feature = "error_reporting"))]
 mod dummy_sentry;
 #[cfg(not(feature = "error_reporting"))]
 use dummy_sentry as sentry_actix;
-
-use actix_web::{middleware, App, HttpServer};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -37,15 +39,42 @@ async fn main() -> std::io::Result<()> {
         let logger =
             middleware::Logger::new("%{r}a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T");
 
+        let json_config = web::JsonConfig::default()
+            .limit(4096)
+            .error_handler(|e, _rq| {
+                log::debug!("json: {}", e);
+
+                ServiceError::BadRequest {
+                    message: e.to_string(),
+                }
+                .into()
+            });
+
+        let path_config = web::PathConfig::default().error_handler(|e, _rq| {
+            log::debug!("path: {}", e);
+
+            ServiceError::BadRequest {
+                message: e.to_string(),
+            }
+            .into()
+        });
+
         App::new()
             .wrap(logger)
             .wrap(middleware::Condition::new(
                 cfg!(feature = "error_reporting"),
                 sentry_actix::Sentry::new(),
             ))
+            .app_data(json_config)
+            .app_data(path_config)
+            .default_service(web::to(|| async {
+                ServiceError::NotFound {}.error_response()
+            }))
             .configure(routes::config)
     })
     .bind(&host)?
+    // FIXME: this fixes multiple instances of proxy maps for each process
+    .workers(1)
     .run();
 
     server.await
