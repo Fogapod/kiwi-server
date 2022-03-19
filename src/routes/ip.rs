@@ -1,26 +1,23 @@
+use actix_web::web::Data;
+use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use std::cmp::{max, min};
 use std::env;
 use std::fs;
+use std::io::Cursor;
 use std::path::PathBuf;
 
-use actix_web::web::Data;
-use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
-
-use rand::seq::IteratorRandom;
-
+use image::GenericImageView;
 use image::{DynamicImage, GenericImage, Rgba};
-
+use rand::seq::IteratorRandom;
 use rusttype::{point, Font, PositionedGlyph, Rect, Scale};
-
-use imageproc::drawing::Canvas;
 
 // a modified version of:
 // https://github.com/silvia-odwyer/gdl/blob/421c8df718ad32f66275d178edec56ec653caff9/crate/src/text.rs#L23
 #[allow(clippy::too_many_arguments)]
 pub fn draw_text_with_border<'a>(
     canvas: &mut DynamicImage,
-    x: u32,
-    y: u32,
+    x: i32,
+    y: i32,
     scale: Scale,
     font: &'a Font<'a>,
     text: &str,
@@ -103,6 +100,7 @@ async fn get_ip(req: HttpRequest, font: Data<Font<'_>>, cfg: Data<Config>) -> im
     .expect("cannot open file");
 
     let (dim_x, dim_y) = image.dimensions();
+    let (dim_x, dim_y) = (dim_x as i32, dim_y as i32);
 
     let scale = Scale::uniform(dim_x as f32 / text.len() as f32 * 2.5);
 
@@ -110,10 +108,10 @@ async fn get_ip(req: HttpRequest, font: Data<Font<'_>>, cfg: Data<Config>) -> im
 
     draw_text_with_border(
         &mut image,
-        dim_x / 2 - min(rendered_text_size.0, dim_x as i32) as u32 / 2,
+        dim_x / 2 - min(rendered_text_size.0, dim_x) / 2,
         min(
-            ((dim_y as f32 * 0.85) - rendered_text_size.1 as f32 * 0.5) as u32,
-            dim_y - min(rendered_text_size.1, dim_y as i32) as u32,
+            ((dim_y as f32 * 0.85) - rendered_text_size.1 as f32 * 0.5) as i32,
+            dim_y - min(rendered_text_size.1, dim_y),
         ),
         scale,
         &font,
@@ -126,7 +124,7 @@ async fn get_ip(req: HttpRequest, font: Data<Font<'_>>, cfg: Data<Config>) -> im
     let mut bytes = vec![];
 
     image
-        .write_to(&mut bytes, image::ImageFormat::Jpeg)
+        .write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Jpeg)
         .expect("failed to encode image");
 
     HttpResponse::Ok().content_type("image/jpeg").body(bytes)

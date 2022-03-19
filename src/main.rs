@@ -1,4 +1,5 @@
 mod routes;
+use std::env;
 
 #[cfg(not(feature = "error_reporting"))]
 mod dummy_sentry;
@@ -7,10 +8,10 @@ use dummy_sentry as sentry_actix;
 
 use actix_web::{middleware, App, HttpServer};
 
-#[actix_rt::main]
+#[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    std::env::set_var("RUST_LOG", "debug");
-    std::env::set_var("RUST_BACKTRACE", "1");
+    env::set_var("RUST_LOG", "debug");
+    env::set_var("RUST_BACKTRACE", "1");
 
     dotenv::dotenv().ok();
 
@@ -25,6 +26,13 @@ async fn main() -> std::io::Result<()> {
         },
     ));
 
+    let host = format!(
+        "{}:{}",
+        env::var("HOST").expect("HOST not set"),
+        env::var("PORT").expect("PORT not set")
+    );
+    log::info!("starting PINK server at http://{}", &host);
+
     let server = HttpServer::new(move || {
         let logger =
             middleware::Logger::new("%{r}a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %T");
@@ -37,7 +45,7 @@ async fn main() -> std::io::Result<()> {
             ))
             .configure(routes::config)
     })
-    .bind("0.0.0.0:8001")?
+    .bind(&host)?
     .run();
 
     server.await

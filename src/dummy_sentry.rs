@@ -6,7 +6,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use actix_service::{Service, Transform};
+use actix_web::dev::{Service, Transform};
 
 pub struct Sentry;
 

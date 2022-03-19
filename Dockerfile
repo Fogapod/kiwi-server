@@ -23,18 +23,18 @@ RUN mkdir src \
     && echo 'fn main() {}' > src/main.rs \
     && source $HOME/.cargo/env \
     && cargo build --release --features="$FEATURES" \
-    && rm -f target/release/deps/kiwi_server*
+    && rm -f target/release/deps/pink_server*
 
 COPY src src
 
 RUN source $HOME/.cargo/env \
     && cargo build --release --features="$FEATURES" \
-    && cp target/release/kiwi-server kiwi-server
+    && cp target/release/pink-server pink-server
 
 FROM scratch
 
 COPY --from=builder /usr/bin/dumb-init /bin/dumb-init
-COPY --from=builder /build/kiwi-server /usr/bin/kiwi-server
+COPY --from=builder /build/pink-server /usr/bin/pink-server
 
 WORKDIR /app
 
@@ -42,4 +42,4 @@ WORKDIR /app
 
 EXPOSE 8001
 
-ENTRYPOINT ["/bin/dumb-init", "--", "kiwi-server"]
+ENTRYPOINT ["/bin/dumb-init", "--", "pink-server"]

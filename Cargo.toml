@@ -1,5 +1,5 @@
 [package]
-name = "kiwi-server"
+name = "pink-server"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,29 +11,22 @@ color = ["env_logger/termcolor"]
 
 [dependencies]
 # core dependencies
-actix-service = "2.0"
 dotenv = "0.15.0"
 # extra dependecies
 rand = "0.8"
 
 # core dependencies
 [dependencies.actix-web]
-version = "4.0.0-beta"
-default-features = false
-
-[dependencies.actix-rt]
-version = "2.5"
+version = "4"
 
 [dependencies.sentry]
-version = "0.23"
+version = "0.25"
 optional = true
 default-features = false
 features = ["backtrace", "contexts", "panic", "reqwest", "rustls"]
 
 [dependencies.sentry-actix]
-# https://github.com/getsentry/sentry-rust/pull/316
-git = "https://github.com/slickbench/sentry-rust"
-branch = "update-actix"
+version = "0.25"
 optional = true
 
 [dependencies.log]
@@ -47,12 +40,15 @@ features = ["atty", "humantime"]
 
 # extra dependencies
 [dependencies.image]
-version = "0.23.14"
+version = "0.24.1"
 #default-features = false
 #features = ["png", "jpeg"]
 
 [dependencies.imageproc]
 version = "0.22.0"
+git = "https://github.com/image-rs/imageproc"
+# image 0.24 support
+rev = "b7942657b1a370fc485507693ed4df1f8a116cb7"
 default-features = false
 
 [dependencies.rusttype]
@@ -61,4 +57,4 @@ version = "0.9.2"
 [profile.release]
 codegen-units = 1
 lto = true
-panic = 'abort'
+panic = 'unwind'
