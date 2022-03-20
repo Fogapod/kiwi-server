@@ -6,7 +6,7 @@ use tokio::time::{self, Duration, Instant};
 use uuid::Uuid;
 
 use crate::auth::authorize;
-use crate::errors::ServiceError;
+use crate::errors::PinkError;
 
 use self::constants::*;
 use self::types::*;
@@ -16,13 +16,13 @@ async fn post_proxy(
     rq: HttpRequest,
     data: web::Json<ProxyURL>,
     proxies: web::Data<Proxies>,
-) -> Result<impl Responder, ServiceError> {
+) -> Result<impl Responder, PinkError> {
     authorize(&rq)?;
 
     let ProxyURL { url, ttl } = data.into_inner();
 
     if !(MIN_TTL..=MAX_TTL).contains(&ttl) {
-        return Err(ServiceError::BadRequest {
+        return Err(PinkError::BadRequest {
             message: "ttl should be between 60 and 3600".into(),
         });
     }
@@ -51,16 +51,15 @@ async fn get_proxy(
 ) -> Result<impl Responder, Error> {
     let id = path.into_inner();
 
-    let proxy =
-        proxies
-            .0
-            .lock()
-            .await
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| ServiceError::BadRequest {
-                message: "bad id".into(),
-            })?;
+    let proxy = proxies
+        .0
+        .lock()
+        .await
+        .get(&id)
+        .cloned()
+        .ok_or_else(|| PinkError::BadRequest {
+            message: "bad id".into(),
+        })?;
 
     let request = client
         .get(proxy.url)
@@ -70,7 +69,7 @@ async fn get_proxy(
         .map_err(|e| {
             log::error!("remote request creation failed: {}", e);
 
-            ServiceError::BadRequest {
+            PinkError::BadRequest {
                 message: "request failed".into(),
             }
         })?;
@@ -102,7 +101,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
     .service(get_proxy);
 
     // proxy cleanup task
-    actix_rt::spawn(async move {
+    actix_web::rt::spawn(async move {
         let duration = Duration::from_secs(MIN_TTL);
 
         loop {

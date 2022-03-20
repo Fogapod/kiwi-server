@@ -11,7 +11,7 @@ struct JsonError {
 }
 
 #[derive(Debug, Display)]
-pub enum ServiceError {
+pub enum PinkError {
     #[display(fmt = "not found")]
     NotFound,
 
@@ -26,7 +26,7 @@ pub enum ServiceError {
     Unauthorized { message: String },
 }
 
-impl ResponseError for ServiceError {
+impl ResponseError for PinkError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,

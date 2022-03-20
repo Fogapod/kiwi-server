@@ -2,23 +2,23 @@ use actix_web::{http::header, HttpRequest};
 
 use constant_time_eq::constant_time_eq;
 
-use crate::errors::ServiceError;
+use crate::errors::PinkError;
 
-pub fn authorize(rq: &HttpRequest) -> Result<(), ServiceError> {
+pub fn authorize(rq: &HttpRequest) -> Result<(), PinkError> {
     let auth_header =
         rq.headers()
             .get(header::AUTHORIZATION)
-            .ok_or_else(|| ServiceError::Unauthorized {
+            .ok_or_else(|| PinkError::Unauthorized {
                 message: "missing Authorization header".into(),
             })?;
 
     let token = auth_header
         .to_str()
-        .map_err(|_| ServiceError::Unauthorized {
+        .map_err(|_| PinkError::Unauthorized {
             message: "bad Authorization header".into(),
         })?
         .strip_prefix("Bearer ")
-        .ok_or_else(|| ServiceError::Unauthorized {
+        .ok_or_else(|| PinkError::Unauthorized {
             message: "bad Bearer token format".into(),
         })?;
 
@@ -26,7 +26,7 @@ pub fn authorize(rq: &HttpRequest) -> Result<(), ServiceError> {
     let master_token = std::env::var("ACCESS_TOKEN").expect("ACCESS_TOKEN not set");
 
     if !constant_time_eq(token.as_bytes(), master_token.as_bytes()) {
-        return Err(ServiceError::Unauthorized {
+        return Err(PinkError::Unauthorized {
             message: "bad token".into(),
         });
     }

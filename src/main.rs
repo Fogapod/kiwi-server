@@ -3,7 +3,7 @@ mod errors;
 mod routes;
 
 use actix_web::{middleware, web, App, HttpServer, ResponseError};
-use errors::ServiceError;
+use errors::PinkError;
 use std::env;
 #[cfg(not(feature = "error_reporting"))]
 mod dummy_sentry;
@@ -42,9 +42,7 @@ async fn main() -> std::io::Result<()> {
         let json_config = web::JsonConfig::default()
             .limit(4096)
             .error_handler(|e, _rq| {
-                log::debug!("json: {}", e);
-
-                ServiceError::BadRequest {
+                PinkError::BadRequest {
                     message: e.to_string(),
                 }
                 .into()
@@ -53,7 +51,7 @@ async fn main() -> std::io::Result<()> {
         let path_config = web::PathConfig::default().error_handler(|e, _rq| {
             log::debug!("path: {}", e);
 
-            ServiceError::BadRequest {
+            PinkError::BadRequest {
                 message: e.to_string(),
             }
             .into()
@@ -68,7 +66,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(json_config)
             .app_data(path_config)
             .default_service(web::to(|| async {
-                ServiceError::NotFound {}.error_response()
+                PinkError::NotFound {}.error_response()
             }))
             .configure(routes::config)
     })

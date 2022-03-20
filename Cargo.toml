@@ -10,69 +10,43 @@ error_reporting = ["sentry", "sentry-actix"]
 color = ["env_logger/termcolor"]
 
 [dependencies]
+# web framework
+actix-web = { version = "4" }
+
+# configuration
 dotenv = "0.15.0"
+
+# logging
+log = { version = "0.4", features = ["release_max_level_info"] }
+env_logger = { version = "0.9", default_features = false, features = ["atty", "humantime"] }
+
+# async framework
+tokio = { version = "1.9.0", default-features = false, features = ["time", "sync"] }
+
+# serialization
 serde = { version = "1.0", features = ["derive"] }
+derive_more = { version = "0.99.16", default-features = false, features = ["display"] }
+
+# optional error reporting
+sentry = { version = "0.25", optional = true, default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry-actix = { version = "0.25", optional = true }
+
+# auth
 constant_time_eq = "0.1.5"
+
+# image manipulation
+image = { version = "0.24.1", default-features = false, features = ["gif", "jpeg", "jpeg_rayon", "png", "webp"] }
+# image 0.24 support
+imageproc = { version = "0.22.0", git = "https://github.com/image-rs/imageproc", rev = "b7942657b1a370fc485507693ed4df1f8a116cb7", default-features = false }
+rusttype = "0.9.2"
+
+# misc
 rand = "0.8"
 
-[dependencies.actix-web]
-version = "4"
+# used in /proxy, to be removed
+uuid = { version = "0.8.2", features = ["v4", "serde"] }
+awc = { version = "3.0.0", default-features = false, features = ["rustls"] }
 
-[dependencies.sentry]
-version = "0.25"
-optional = true
-default-features = false
-features = ["backtrace", "contexts", "panic", "reqwest", "rustls"]
-
-[dependencies.sentry-actix]
-version = "0.25"
-optional = true
-
-[dependencies.log]
-version = "0.4"
-features = ["release_max_level_info"]
-
-[dependencies.env_logger]
-version = "0.9"
-default_features = false
-features = ["atty", "humantime"]
-
-[dependencies.image]
-version = "0.24.1"
-#default-features = false
-#features = ["png", "jpeg"]
-
-[dependencies.imageproc]
-version = "0.22.0"
-git = "https://github.com/image-rs/imageproc"
-# image 0.24 support
-rev = "b7942657b1a370fc485507693ed4df1f8a116cb7"
-default-features = false
-
-[dependencies.rusttype]
-version = "0.9.2"
-
-[dependencies.uuid]
-version = "0.8.2"
-features = ["v4", "serde"]
-
-[dependencies.derive_more]
-version = "0.99.16"
-default-features = false
-features = ["display"]
-
-[dependencies.tokio]
-version = "1.9.0"
-default-features = false
-features = ["time", "sync"]
-
-[dependencies.awc]
-version = "3.0.0-beta"
-default-features = false
-features = ["rustls"]
-
-[dependencies.actix-rt]
-version = "2.2.0"
 
 [profile.release]
 codegen-units = 1
