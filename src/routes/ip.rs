@@ -6,8 +6,11 @@ use actix_web::{
 use image::{
     codecs::gif::{GifDecoder, GifEncoder},
     io::Reader as ImageReader,
-    AnimationDecoder, DynamicImage, ImageBuffer, ImageDecoder, ImageFormat, Rgba,
+    AnimationDecoder, DynamicImage, GenericImage, ImageDecoder, ImageFormat, Rgba,
 };
+use serde::Deserialize;
+
+use imageproc::drawing::Canvas;
 use rand::seq::IteratorRandom;
 use rusttype::{point, Font, PositionedGlyph, Rect, Scale};
 use std::{
@@ -16,21 +19,22 @@ use std::{
     io::Cursor,
     path::{Path, PathBuf},
 };
-
 // a modified version of:
 // https://github.com/silvia-odwyer/gdl/blob/421c8df718ad32f66275d178edec56ec653caff9/crate/src/text.rs#L23
 #[allow(clippy::too_many_arguments)]
-fn draw_text_with_border<'a>(
-    canvas: &mut ImageBuffer<image::Rgba<u8>, std::vec::Vec<u8>>,
+fn draw_text_with_border<'a, C>(
+    canvas: &mut C,
     x: u32,
     y: u32,
     scale: Scale,
     font: &'a Font<'a>,
     text: &str,
-    color: Rgba<u8>,
-    outline_color: Rgba<u8>,
+    color: C::Pixel,
+    outline_color: C::Pixel,
     outline_width: u8,
-) {
+) where
+    C: GenericImage<Pixel = Rgba<u8>>,
+{
     let mut background: DynamicImage = DynamicImage::new_luma8(canvas.width(), canvas.height());
 
     imageproc::drawing::draw_text_mut(
@@ -138,13 +142,38 @@ fn image_format_to_mime(format: &ImageFormat) -> &'static str {
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct IPQuery {
+    // FIXME: allows elative paths!!!
+    im: Option<PathBuf>,
+}
+
 #[get("")]
-async fn get_ip(req: HttpRequest, font: Data<Font<'_>>, cfg: Data<Config>) -> impl Responder {
+async fn get_ip(
+    req: HttpRequest,
+    font: Data<Font<'_>>,
+    cfg: Data<Config>,
+    // FIXME: allows elative paths!!!
+    query: web::Query<IPQuery>,
+) -> impl Responder {
     let conn_info = req.connection_info();
     let text = conn_info.realip_remote_addr().unwrap_or("anon");
 
-    let random_image = get_random_file(&cfg.memes_path);
-    let (image_format, opened_image) = open_image(&random_image);
+    // FIXME: allows elative paths!!!
+    let image_path = query
+        .im
+        .clone()
+        .and_then(|path| {
+            let full_path = cfg.memes_path.join(path);
+            if full_path.exists() {
+                Some(full_path)
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| get_random_file(&cfg.memes_path));
+
+    let (image_format, opened_image) = open_image(&image_path);
 
     let mut bytes = vec![];
 
@@ -182,7 +211,7 @@ async fn get_ip(req: HttpRequest, font: Data<Font<'_>>, cfg: Data<Config>) -> im
                 .expect("encoding gif");
         }
         _ => {
-            let mut image = opened_image.decode().expect("reading image").into_rgba8();
+            let mut image = opened_image.decode().expect("reading image");
             let (dim_x, dim_y) = image.dimensions();
 
             let scale = Scale::uniform(dim_x as f32 / text.len() as f32 * 2.5);
