@@ -1,22 +1,27 @@
-use actix_web::web::Data;
-use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
-use image::io::Reader as ImageReader;
-use image::GenericImageView;
-use image::ImageFormat;
-use image::{DynamicImage, GenericImage, Rgba};
+use actix_web::{
+    get,
+    web::{self, Data},
+    HttpRequest, HttpResponse, Responder,
+};
+use image::{
+    codecs::gif::{GifDecoder, GifEncoder},
+    io::Reader as ImageReader,
+    AnimationDecoder, DynamicImage, ImageBuffer, ImageDecoder, ImageFormat, Rgba,
+};
 use rand::seq::IteratorRandom;
 use rusttype::{point, Font, PositionedGlyph, Rect, Scale};
-use std::cmp::{max, min};
-use std::env;
-use std::fs;
-use std::io::Cursor;
-use std::path::{Path, PathBuf};
+use std::{
+    cmp::{max, min},
+    env, fs,
+    io::Cursor,
+    path::{Path, PathBuf},
+};
 
 // a modified version of:
 // https://github.com/silvia-odwyer/gdl/blob/421c8df718ad32f66275d178edec56ec653caff9/crate/src/text.rs#L23
 #[allow(clippy::too_many_arguments)]
 fn draw_text_with_border<'a>(
-    canvas: &mut DynamicImage,
+    canvas: &mut ImageBuffer<image::Rgba<u8>, std::vec::Vec<u8>>,
     x: u32,
     y: u32,
     scale: Scale,
@@ -100,7 +105,7 @@ fn get_random_file(path: &Path) -> PathBuf {
         .path()
 }
 
-fn load_image(path: &Path) -> (ImageFormat, DynamicImage) {
+fn open_image(path: &Path) -> (ImageFormat, ImageReader<Cursor<Vec<u8>>>) {
     let random_image = fs::read(path).expect("read image");
 
     let image_reader = ImageReader::new(Cursor::new(random_image))
@@ -109,47 +114,104 @@ fn load_image(path: &Path) -> (ImageFormat, DynamicImage) {
 
     (
         image_reader.format().expect("format not detected"),
-        image_reader.decode().expect("decoding image"),
+        image_reader,
     )
+}
+
+// a reversed version of ImageFormat.from_extension
+fn image_format_to_mime(format: &ImageFormat) -> &'static str {
+    match format {
+        ImageFormat::Avif => "image/avif",
+        ImageFormat::Jpeg => "image/jpeg",
+        ImageFormat::Png => "image/png",
+        ImageFormat::Gif => "image/gif",
+        ImageFormat::WebP => "image/webp",
+        ImageFormat::Tiff => "image/tiff",
+        ImageFormat::Tga => "image/x-targa",
+        ImageFormat::Dds => "image/vnd-ms.dds",
+        ImageFormat::Bmp => "image/bmp",
+        ImageFormat::Ico => "image/x-icon",
+        ImageFormat::Hdr => "image/vnd.radiance",
+        ImageFormat::OpenExr => "image/x-exr",
+        ImageFormat::Pnm => "image/x-portable-bitmap",
+        _ => "application/octet-stream",
+    }
 }
 
 #[get("")]
 async fn get_ip(req: HttpRequest, font: Data<Font<'_>>, cfg: Data<Config>) -> impl Responder {
     let conn_info = req.connection_info();
-    let text = &conn_info.realip_remote_addr().unwrap_or("anon");
+    let text = conn_info.realip_remote_addr().unwrap_or("anon");
 
     let random_image = get_random_file(&cfg.memes_path);
-    let (image_format, mut image) = load_image(&random_image);
-
-    let (dim_x, dim_y) = image.dimensions();
-    //let (dim_x, dim_y) = (dim_x as i32, dim_y as i32);
-
-    let scale = Scale::uniform(dim_x as f32 / text.len() as f32 * 2.5);
-
-    let rendered_text_size = text_size(scale, &font, text);
-
-    draw_text_with_border(
-        &mut image,
-        dim_x / 2 - min(rendered_text_size.0, dim_x) / 2,
-        min(
-            ((dim_y as f32 * 0.85) - rendered_text_size.1 as f32 * 0.5) as u32,
-            dim_y - min(rendered_text_size.1, dim_y),
-        ),
-        scale,
-        &font,
-        text,
-        Rgba([255u8, 255u8, 255u8, 255u8]),
-        Rgba([0u8, 0u8, 0u8, 255u8]),
-        2,
-    );
+    let (image_format, opened_image) = open_image(&random_image);
 
     let mut bytes = vec![];
 
-    image
-        .write_to(&mut Cursor::new(&mut bytes), image_format)
-        .expect("encode image");
+    match image_format {
+        ImageFormat::Gif => {
+            let decoder = GifDecoder::new(opened_image.into_inner()).expect("reading gif image");
 
-    HttpResponse::Ok().content_type("image/jpeg").body(bytes)
+            let (dim_x, dim_y) = decoder.dimensions();
+
+            let scale = Scale::uniform(dim_x as f32 / text.len() as f32 * 2.5);
+
+            let rendered_text_size = text_size(scale, &font, text);
+
+            let frames = decoder.into_frames();
+            let mut frames = frames.collect_frames().expect("decoding gif");
+            for frame in frames.iter_mut() {
+                draw_text_with_border(
+                    frame.buffer_mut(),
+                    dim_x / 2 - min(rendered_text_size.0, dim_x) / 2,
+                    min(
+                        ((dim_y as f32 * 0.85) - rendered_text_size.1 as f32 * 0.5) as u32,
+                        dim_y - min(rendered_text_size.1, dim_y),
+                    ),
+                    scale,
+                    &font,
+                    text,
+                    Rgba([255u8, 255u8, 255u8, 255u8]),
+                    Rgba([0u8, 0u8, 0u8, 255u8]),
+                    2,
+                );
+            }
+            let mut encoder = GifEncoder::new(&mut bytes);
+            encoder
+                .encode_frames(frames.into_iter())
+                .expect("encoding gif");
+        }
+        _ => {
+            let mut image = opened_image.decode().expect("reading image").into_rgba8();
+            let (dim_x, dim_y) = image.dimensions();
+
+            let scale = Scale::uniform(dim_x as f32 / text.len() as f32 * 2.5);
+
+            let rendered_text_size = text_size(scale, &font, text);
+
+            draw_text_with_border(
+                &mut image,
+                dim_x / 2 - min(rendered_text_size.0, dim_x) / 2,
+                min(
+                    ((dim_y as f32 * 0.85) - rendered_text_size.1 as f32 * 0.5) as u32,
+                    dim_y - min(rendered_text_size.1, dim_y),
+                ),
+                scale,
+                &font,
+                text,
+                Rgba([255u8, 255u8, 255u8, 255u8]),
+                Rgba([0u8, 0u8, 0u8, 255u8]),
+                2,
+            );
+            image
+                .write_to(&mut Cursor::new(&mut bytes), image_format)
+                .expect("encoding image");
+        }
+    }
+
+    HttpResponse::Ok()
+        .content_type(image_format_to_mime(&image_format))
+        .body(bytes)
 }
 
 struct Config {
