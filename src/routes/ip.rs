@@ -1,23 +1,24 @@
 use actix_web::web::Data;
 use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
+use image::io::Reader as ImageReader;
+use image::GenericImageView;
+use image::ImageFormat;
+use image::{DynamicImage, GenericImage, Rgba};
+use rand::seq::IteratorRandom;
+use rusttype::{point, Font, PositionedGlyph, Rect, Scale};
 use std::cmp::{max, min};
 use std::env;
 use std::fs;
 use std::io::Cursor;
-use std::path::PathBuf;
-
-use image::GenericImageView;
-use image::{DynamicImage, GenericImage, Rgba};
-use rand::seq::IteratorRandom;
-use rusttype::{point, Font, PositionedGlyph, Rect, Scale};
+use std::path::{Path, PathBuf};
 
 // a modified version of:
 // https://github.com/silvia-odwyer/gdl/blob/421c8df718ad32f66275d178edec56ec653caff9/crate/src/text.rs#L23
 #[allow(clippy::too_many_arguments)]
-pub fn draw_text_with_border<'a>(
+fn draw_text_with_border<'a>(
     canvas: &mut DynamicImage,
-    x: i32,
-    y: i32,
+    x: u32,
+    y: u32,
     scale: Scale,
     font: &'a Font<'a>,
     text: &str,
@@ -27,7 +28,15 @@ pub fn draw_text_with_border<'a>(
 ) {
     let mut background: DynamicImage = DynamicImage::new_luma8(canvas.width(), canvas.height());
 
-    imageproc::drawing::draw_text_mut(&mut background, color, x, y, scale, font, text);
+    imageproc::drawing::draw_text_mut(
+        &mut background,
+        color,
+        x as i32,
+        y as i32,
+        scale,
+        font,
+        text,
+    );
 
     let mut background = background.to_luma8();
 
@@ -47,7 +56,7 @@ pub fn draw_text_with_border<'a>(
         }
     }
 
-    imageproc::drawing::draw_text_mut(canvas, color, x, y, scale, font, text);
+    imageproc::drawing::draw_text_mut(canvas, color, x as i32, y as i32, scale, font, text);
 }
 
 // taken from https://github.com/image-rs/imageproc/pull/453
@@ -75,32 +84,45 @@ fn layout_glyphs(
 
 // taken from https://github.com/image-rs/imageproc/pull/453
 // because it is not yet released
-pub fn text_size(scale: Scale, font: &Font, text: &str) -> (i32, i32) {
-    layout_glyphs(scale, font, text, |_, _| {})
+fn text_size(scale: Scale, font: &Font, text: &str) -> (u32, u32) {
+    let (x, y) = layout_glyphs(scale, font, text, |_, _| {});
+
+    (x as u32, y as u32)
+}
+
+fn get_random_file(path: &Path) -> PathBuf {
+    let files = fs::read_dir(path).expect("read memes directory");
+
+    files
+        .choose(&mut rand::thread_rng())
+        .expect("memes directory is empty")
+        .expect("get next image in directory")
+        .path()
+}
+
+fn load_image(path: &Path) -> (ImageFormat, DynamicImage) {
+    let random_image = fs::read(path).expect("read image");
+
+    let image_reader = ImageReader::new(Cursor::new(random_image))
+        .with_guessed_format()
+        .expect("guessing image format");
+
+    (
+        image_reader.format().expect("format not detected"),
+        image_reader.decode().expect("decoding image"),
+    )
 }
 
 #[get("")]
 async fn get_ip(req: HttpRequest, font: Data<Font<'_>>, cfg: Data<Config>) -> impl Responder {
     let conn_info = req.connection_info();
-    let text = &conn_info
-        .realip_remote_addr()
-        .unwrap_or("unknown remote address");
+    let text = &conn_info.realip_remote_addr().unwrap_or("anon");
 
-    let files = fs::read_dir(&cfg.memes_path).expect("unable to read memes directory");
-
-    let mut rng = rand::thread_rng();
-
-    let mut image = image::open(
-        files
-            .choose(&mut rng)
-            .expect("memes directory is empty")
-            .expect("unable to get next memes file in directory")
-            .path(),
-    )
-    .expect("cannot open file");
+    let random_image = get_random_file(&cfg.memes_path);
+    let (image_format, mut image) = load_image(&random_image);
 
     let (dim_x, dim_y) = image.dimensions();
-    let (dim_x, dim_y) = (dim_x as i32, dim_y as i32);
+    //let (dim_x, dim_y) = (dim_x as i32, dim_y as i32);
 
     let scale = Scale::uniform(dim_x as f32 / text.len() as f32 * 2.5);
 
@@ -110,7 +132,7 @@ async fn get_ip(req: HttpRequest, font: Data<Font<'_>>, cfg: Data<Config>) -> im
         &mut image,
         dim_x / 2 - min(rendered_text_size.0, dim_x) / 2,
         min(
-            ((dim_y as f32 * 0.85) - rendered_text_size.1 as f32 * 0.5) as i32,
+            ((dim_y as f32 * 0.85) - rendered_text_size.1 as f32 * 0.5) as u32,
             dim_y - min(rendered_text_size.1, dim_y),
         ),
         scale,
@@ -124,8 +146,8 @@ async fn get_ip(req: HttpRequest, font: Data<Font<'_>>, cfg: Data<Config>) -> im
     let mut bytes = vec![];
 
     image
-        .write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Jpeg)
-        .expect("failed to encode image");
+        .write_to(&mut Cursor::new(&mut bytes), image_format)
+        .expect("encode image");
 
     HttpResponse::Ok().content_type("image/jpeg").body(bytes)
 }
@@ -139,7 +161,7 @@ pub fn config(cfg: &mut web::ServiceConfig) {
         .expect("font file does not exist");
 
     cfg.app_data(Data::new(
-        Font::try_from_vec(font_bytes).expect("failed to load font"),
+        Font::try_from_vec(font_bytes).expect("load font"),
     ))
     .app_data(Data::new(Config {
         memes_path: PathBuf::from(env::var("MEMES_PATH").expect("MEMES_PATH not set")),
