@@ -27,10 +27,11 @@ fn make_text_overlay<'a>(
     height: u32,
     font: &'a Font<'a>,
     text: &str,
-    color: Rgba<u8>,
-    outline_color: Rgba<u8>,
-    outline_width: u8,
 ) -> impl GenericImage<Pixel = Rgba<u8>> {
+    let color = Rgba([255u8, 255u8, 255u8, 255u8]);
+    let outline_color = Rgba([0u8, 0u8, 0u8, 255u8]);
+    let outline_width = 2;
+
     let scale = Scale::uniform(width as f32 / text.len() as f32 * 2.5);
     let rendered_text_size = text_size(scale, font, text);
 
@@ -222,15 +223,8 @@ async fn get_ip(
 
             let (dim_x, dim_y) = decoder.dimensions();
 
-            let overlay = make_text_overlay(
-                dim_x,
-                dim_y,
-                &font,
-                text,
-                Rgba([255u8, 255u8, 255u8, 255u8]),
-                Rgba([0u8, 0u8, 0u8, 255u8]),
-                2,
-            );
+            let overlay = make_text_overlay(dim_x, dim_y, &font, text);
+
             for mut frame in decoder.into_frames().map(|f| f.expect("decoding frame")) {
                 paste_image_mut(&overlay, frame.buffer_mut());
                 encoder.encode_frame(frame).expect("encoding frame");
@@ -240,16 +234,8 @@ async fn get_ip(
             let mut image = opened_image.decode().expect("reading image");
             let (dim_x, dim_y) = image.dimensions();
 
-            let overlay = make_text_overlay(
-                dim_x,
-                dim_y,
-                &font,
-                text,
-                Rgba([255u8, 255u8, 255u8, 255u8]),
-                Rgba([0u8, 0u8, 0u8, 255u8]),
-                2,
-            );
-            paste_image_mut(&overlay, &mut image);
+            paste_image_mut(&make_text_overlay(dim_x, dim_y, &font, text), &mut image);
+
             image
                 .write_to(&mut Cursor::new(&mut bytes), image_format)
                 .expect("encoding image");
