@@ -28,63 +28,73 @@ fn make_text_overlay<'a>(
     font: &'a Font<'a>,
     text: &str,
 ) -> impl GenericImage<Pixel = Rgba<u8>> {
-    let color = Rgba([255u8, 255u8, 255u8, 255u8]);
-    let outline_color = Rgba([0u8, 0u8, 0u8, 255u8]);
-    let outline_width = 2;
+    let color = Rgba([255, 255, 255, 255]);
+    let outline_color = Rgba([0, 0, 0, 255]);
+    // TODOL dynamic
+    let outline_width: u32 = 3;
 
+    // wtf is this insane math? TODO: cleanup
     let scale = Scale::uniform(width as f32 / text.len() as f32 * 2.5);
-    let rendered_text_size = text_size(scale, font, text);
+    let (rendered_width, rendered_height) = text_size(scale, font, text);
 
-    let x = width / 2 - min(rendered_text_size.0, width) / 2;
-    let y = min(
-        ((height as f32 * 0.85) - rendered_text_size.1 as f32 * 0.5) as u32,
-        height - min(rendered_text_size.1, height),
+    // wtf is this insane math? TODO: cleanup
+    let pos_x = width / 2 - min(rendered_width, width) / 2;
+    let pos_y = min(
+        ((height as f32 * 0.85) - rendered_height as f32 * 0.5) as u32,
+        height - min(rendered_height, height),
     );
 
-    let mut background: DynamicImage = DynamicImage::new_luma8(width, height);
+    let mut canvas = DynamicImage::new_rgba8(width, height);
+
+    let mut text_image: DynamicImage = DynamicImage::new_luma8(width, height);
+    let mut text_image_outline: DynamicImage = DynamicImage::new_luma8(width, height);
 
     imageproc::drawing::draw_text_mut(
-        &mut background,
+        &mut text_image,
         color,
-        x as i32,
-        y as i32,
+        pos_x as i32,
+        pos_y as i32,
+        scale,
+        font,
+        text,
+    );
+    imageproc::drawing::draw_text_mut(
+        &mut text_image_outline,
+        color,
+        pos_x as i32,
+        pos_y as i32,
         scale,
         font,
         text,
     );
 
-    let mut background = background.to_luma8();
+    let mut text_image_outline = text_image_outline.to_luma8();
 
     imageproc::morphology::dilate_mut(
-        &mut background,
+        &mut text_image_outline,
         imageproc::distance_transform::Norm::LInf,
-        outline_width,
+        outline_width as u8,
     );
 
-    let mut background = DynamicImage::ImageLuma8(background).to_rgba8();
-
-    for x in 0..background.width() {
-        for y in 0..background.height() {
-            let pixel = background.get_pixel(x, y);
-            if pixel == &outline_color {
-                background.put_pixel(x, y, Rgba([0, 0, 0, 0]));
+    // FIXME: these can probably overflow on outline_width
+    for x in pos_x - outline_width..width {
+        for y in pos_y - outline_width..height {
+            let pixval = 255 - text_image_outline.get_pixel(x, y).0[0];
+            if pixval != 255 {
+                canvas.put_pixel(x, y, outline_color);
+            }
+        }
+    }
+    for x in pos_x - outline_width..width {
+        for y in pos_y - outline_width..height {
+            let pixval = 255 - text_image.get_pixel(x, y).0[0];
+            if pixval != 255 {
+                canvas.put_pixel(x, y, color);
             }
         }
     }
 
-    // awfully expensive
-    //
-    // imageproc::drawing::draw_text_mut(
-    //     &mut background,
-    //     outline_color,
-    //     x as i32,
-    //     y as i32,
-    //     scale,
-    //     font,
-    //     text,
-    // );
-
-    background
+    canvas
 }
 
 fn paste_image_mut<S, D>(src: &S, dst: &mut D)
