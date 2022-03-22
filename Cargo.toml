@@ -32,7 +32,7 @@ sentry = { version = "0.25", optional = true, default-features = false, features
 sentry-actix = { version = "0.25", optional = true }
 
 # auth
-constant_time_eq = "0.1.5"
+constant_time_eq = "0.2.0"
 
 # image manipulation
 image = { version = "0.24", default-features = false, features = ["gif", "jpeg", "jpeg_rayon", "png", "webp"] }
@@ -47,6 +47,10 @@ rand = "0.8"
 # used in /proxy, to be removed
 uuid = { version = "0.8", features = ["v4", "serde"] }
 awc = { version = "3.0", default-features = false, features = ["rustls"] }
+
+[patch.crates-io]
+# implements suggested changes from https://github.com/image-rs/image-gif/issues/113
+gif = { version = "*", git = "https://github.com/Fogapod/image-gif", branch = "issue-113" }
 
 [profile.release]
 codegen-units = 1

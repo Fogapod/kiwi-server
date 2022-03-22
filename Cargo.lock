@@ -435,9 +435,9 @@ checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 
 [[package]]
 name = "constant_time_eq"
-version = "0.1.5"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
+checksum = "5d32ac3eea49b83f7a96a9e848b9a461735f0bac6ca89e71ef998aed6adcf83c"
 
 [[package]]
 name = "conv"
@@ -737,8 +737,7 @@ dependencies = [
 [[package]]
 name = "gif"
 version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3a7187e78088aead22ceedeee99779455b23fc231fe13ec443f99bb71694e5b"
+source = "git+https://github.com/Fogapod/image-gif?branch=issue-113#91e4b813f479415bf200e077f04be0593f84a6d5"
 dependencies = [
  "color_quant",
  "weezl",
