@@ -47,7 +47,6 @@ rand = "0.8"
 uuid = { version = "0.8.2", features = ["v4", "serde"] }
 awc = { version = "3.0.0", default-features = false, features = ["rustls"] }
 
-
 [profile.release]
 codegen-units = 1
 lto = true

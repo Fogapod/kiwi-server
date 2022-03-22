@@ -6,141 +6,88 @@ use actix_web::{
 use image::{
     codecs::gif::{self, GifDecoder, GifEncoder},
     io::Reader as ImageReader,
-    AnimationDecoder, DynamicImage, GenericImage, ImageDecoder, ImageFormat, Rgba,
+    AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, Rgba, RgbaImage,
 };
 use serde::Deserialize;
 
 use imageproc::drawing::Canvas;
 use rand::seq::IteratorRandom;
-use rusttype::{point, Font, PositionedGlyph, Rect, Scale};
+use rusttype::{Font, Scale};
+
 use std::{
-    cmp::{max, min},
+    cmp::min,
     env, fs,
     io::Cursor,
     path::{Path, PathBuf},
 };
 
-// a modified version of:
+// text outline algo originated in:
 // https://github.com/silvia-odwyer/gdl/blob/421c8df718ad32f66275d178edec56ec653caff9/crate/src/text.rs#L23
-fn make_text_overlay<'a>(
-    width: u32,
-    height: u32,
-    font: &'a Font<'a>,
-    text: &str,
-) -> impl GenericImage<Pixel = Rgba<u8>> {
+fn make_text_overlay(width: u32, height: u32, font: &Font, text: &str) -> (RgbaImage, (i64, i64)) {
     let color = Rgba([255, 255, 255, 255]);
     let outline_color = Rgba([0, 0, 0, 255]);
     // TODOL dynamic
-    let outline_width: u32 = 3;
+    let outline_width = 3;
 
     // wtf is this insane math? TODO: cleanup
     let scale = Scale::uniform(width as f32 / text.len() as f32 * 2.5);
-    let (rendered_width, rendered_height) = text_size(scale, font, text);
+    let (rendered_width, rendered_height) = imageproc::drawing::text_size(scale, font, text);
+    let (rendered_width, rendered_height) = (rendered_width as u32, rendered_height as u32);
 
     // wtf is this insane math? TODO: cleanup
     let pos_x = width / 2 - min(rendered_width, width) / 2;
     let pos_y = min(
         ((height as f32 * 0.85) - rendered_height as f32 * 0.5) as u32,
         height - min(rendered_height, height),
-    );
+    ) - outline_width;
 
-    let mut canvas = DynamicImage::new_rgba8(width, height);
+    let canvas_width = rendered_width + outline_width * 2;
+    let canvas_height = rendered_height + outline_width * 2;
 
-    let mut text_image: DynamicImage = DynamicImage::new_luma8(width, height);
-    let mut text_image_outline: DynamicImage = DynamicImage::new_luma8(width, height);
+    let mut canvas = RgbaImage::new(canvas_width, canvas_height);
+
+    let mut text_image = DynamicImage::new_luma8(canvas_width, canvas_height);
+    let text_image = text_image.as_mut_luma8().unwrap();
 
     imageproc::drawing::draw_text_mut(
-        &mut text_image,
-        color,
-        pos_x as i32,
-        pos_y as i32,
-        scale,
-        font,
-        text,
-    );
-    imageproc::drawing::draw_text_mut(
-        &mut text_image_outline,
-        color,
-        pos_x as i32,
-        pos_y as i32,
+        text_image,
+        image::Luma([255]),
+        outline_width as i32,
+        outline_width as i32,
         scale,
         font,
         text,
     );
 
-    let mut text_image_outline = text_image_outline.to_luma8();
-
+    // grow letters
     imageproc::morphology::dilate_mut(
-        &mut text_image_outline,
+        text_image,
         imageproc::distance_transform::Norm::LInf,
         outline_width as u8,
     );
 
-    // FIXME: these can probably overflow on outline_width
-    for x in pos_x - outline_width..width {
-        for y in pos_y - outline_width..height {
-            let pixval = 255 - text_image_outline.get_pixel(x, y).0[0];
-            if pixval != 255 {
-                canvas.put_pixel(x, y, outline_color);
+    imageproc::drawing::draw_text_mut(
+        text_image,
+        image::Luma([128]),
+        outline_width as i32,
+        outline_width as i32,
+        scale,
+        font,
+        text,
+    );
+
+    for x in 0..canvas_width {
+        for y in 0..canvas_height {
+            match text_image.get_pixel(x, y).0[0] {
+                // janky but works
+                200..=255 => canvas.put_pixel(x, y, outline_color),
+                1..=199 => canvas.put_pixel(x, y, color),
+                _ => continue,
             }
         }
     }
-    for x in pos_x - outline_width..width {
-        for y in pos_y - outline_width..height {
-            let pixval = 255 - text_image.get_pixel(x, y).0[0];
-            if pixval != 255 {
-                canvas.put_pixel(x, y, color);
-            }
-        }
-    }
 
-    canvas
-}
-
-fn paste_image_mut<S, D>(src: &S, dst: &mut D)
-where
-    S: GenericImage<Pixel = Rgba<u8>>,
-    D: GenericImage<Pixel = Rgba<u8>>,
-{
-    for x in 0..dst.width() {
-        for y in 0..dst.height() {
-            let pixel = src.get_pixel(x, y);
-            if pixel.0[3] != 0 {
-                dst.put_pixel(x, y, pixel);
-            }
-        }
-    }
-}
-
-// taken from https://github.com/image-rs/imageproc/pull/453
-// because it is not yet released
-fn layout_glyphs(
-    scale: Scale,
-    font: &Font,
-    text: &str,
-    mut f: impl FnMut(PositionedGlyph, Rect<i32>),
-) -> (i32, i32) {
-    let v_metrics = font.v_metrics(scale);
-
-    let (mut w, mut h) = (0, 0);
-
-    for g in font.layout(text, scale, point(0.0, v_metrics.ascent)) {
-        if let Some(bb) = g.pixel_bounding_box() {
-            w = max(w, bb.max.x);
-            h = max(h, bb.max.y);
-            f(g, bb);
-        }
-    }
-
-    (w, h)
-}
-
-// taken from https://github.com/image-rs/imageproc/pull/453
-// because it is not yet released
-fn text_size(scale: Scale, font: &Font, text: &str) -> (u32, u32) {
-    let (x, y) = layout_glyphs(scale, font, text, |_, _| {});
-
-    (x as u32, y as u32)
+    (canvas, (pos_x.into(), pos_y.into()))
 }
 
 fn get_random_file(path: &Path) -> PathBuf {
@@ -222,21 +169,25 @@ async fn get_ip(
     let (image_format, opened_image) = open_image(&image_path);
 
     let mut bytes = vec![];
-
     match image_format {
         ImageFormat::Gif => {
             let decoder = GifDecoder::new(opened_image.into_inner()).expect("reading gif image");
-            let mut encoder = GifEncoder::new(&mut bytes);
+
+            // speed value of 10 is recommended but it semm to have no effect at the moment:
+            // - https://github.com/image-rs/image/issues/1467
+            // - https://github.com/image-rs/image-gif/issues/108
+            // - https://github.com/image-rs/image-gif/issues/113
+            let mut encoder = GifEncoder::new_with_speed(&mut bytes, 10);
             encoder
                 .set_repeat(gif::Repeat::Infinite)
                 .expect("setting gif repeat");
 
             let (dim_x, dim_y) = decoder.dimensions();
 
-            let overlay = make_text_overlay(dim_x, dim_y, &font, text);
+            let (overlay, (pos_x, pos_y)) = make_text_overlay(dim_x, dim_y, &font, text);
 
             for mut frame in decoder.into_frames().map(|f| f.expect("decoding frame")) {
-                paste_image_mut(&overlay, frame.buffer_mut());
+                image::imageops::overlay(frame.buffer_mut(), &overlay, pos_x, pos_y);
                 encoder.encode_frame(frame).expect("encoding frame");
             }
         }
@@ -244,7 +195,8 @@ async fn get_ip(
             let mut image = opened_image.decode().expect("reading image");
             let (dim_x, dim_y) = image.dimensions();
 
-            paste_image_mut(&make_text_overlay(dim_x, dim_y, &font, text), &mut image);
+            let (overlay, (pos_x, pos_y)) = make_text_overlay(dim_x, dim_y, &font, text);
+            image::imageops::overlay(&mut image, &overlay, pos_x, pos_y);
 
             image
                 .write_to(&mut Cursor::new(&mut bytes), image_format)
