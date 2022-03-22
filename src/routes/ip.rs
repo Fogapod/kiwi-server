@@ -8,11 +8,11 @@ use image::{
     io::Reader as ImageReader,
     AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, Rgba, RgbaImage,
 };
-use serde::Deserialize;
-
 use imageproc::drawing::Canvas;
 use rand::seq::IteratorRandom;
+use rayon::prelude::*;
 use rusttype::{Font, Scale};
+use serde::Deserialize;
 
 use std::{
     cmp::min,
@@ -186,10 +186,20 @@ async fn get_ip(
 
             let (overlay, (pos_x, pos_y)) = make_text_overlay(dim_x, dim_y, &font, text);
 
-            for mut frame in decoder.into_frames().map(|f| f.expect("decoding frame")) {
-                image::imageops::overlay(frame.buffer_mut(), &overlay, pos_x, pos_y);
-                encoder.encode_frame(frame).expect("encoding frame");
-            }
+            let mut frames = vec![];
+
+            decoder
+                .into_frames()
+                .collect_frames()
+                .expect("decoding gif")
+                .into_par_iter()
+                .map(|mut frame| {
+                    image::imageops::overlay(frame.buffer_mut(), &overlay, pos_x, pos_y);
+                    frame
+                })
+                .collect_into_vec(&mut frames);
+
+            encoder.encode_frames(frames).expect("encoding gif");
         }
         _ => {
             let mut image = opened_image.decode().expect("reading image");

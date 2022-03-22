@@ -1342,6 +1342,7 @@ dependencies = [
  "imageproc",
  "log",
  "rand 0.8.4",
+ "rayon",
  "rusttype",
  "sentry",
  "sentry-actix",

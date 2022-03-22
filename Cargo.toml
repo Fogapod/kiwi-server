@@ -11,7 +11,7 @@ color = ["env_logger/termcolor"]
 
 [dependencies]
 # web framework
-actix-web = { version = "4" }
+actix-web = { version = "4.0" }
 
 # configuration
 dotenv = "0.15.0"
@@ -21,11 +21,11 @@ log = { version = "0.4", features = ["release_max_level_info"] }
 env_logger = { version = "0.9", default_features = false, features = ["atty", "humantime"] }
 
 # async framework
-tokio = { version = "1.9.0", default-features = false, features = ["time", "sync"] }
+tokio = { version = "1.9", default-features = false, features = ["time", "sync"] }
 
 # serialization
 serde = { version = "1.0", features = ["derive"] }
-derive_more = { version = "0.99.16", default-features = false, features = ["display"] }
+derive_more = { version = "0.99", default-features = false, features = ["display"] }
 
 # optional error reporting
 sentry = { version = "0.25", optional = true, default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
@@ -35,17 +35,18 @@ sentry-actix = { version = "0.25", optional = true }
 constant_time_eq = "0.1.5"
 
 # image manipulation
-image = { version = "0.24.1", default-features = false, features = ["gif", "jpeg", "jpeg_rayon", "png", "webp"] }
+image = { version = "0.24", default-features = false, features = ["gif", "jpeg", "jpeg_rayon", "png", "webp"] }
 # image 0.24 support
-imageproc = { version = "0.22.0", git = "https://github.com/image-rs/imageproc", rev = "b7942657b1a370fc485507693ed4df1f8a116cb7", default-features = false }
-rusttype = "0.9.2"
+imageproc = { version = "0.22", git = "https://github.com/image-rs/imageproc", rev = "b7942657b1a370fc485507693ed4df1f8a116cb7", default-features = false }
+rusttype = "0.9"
+rayon = "1.5"
 
 # misc
 rand = "0.8"
 
 # used in /proxy, to be removed
-uuid = { version = "0.8.2", features = ["v4", "serde"] }
-awc = { version = "3.0.0", default-features = false, features = ["rustls"] }
+uuid = { version = "0.8", features = ["v4", "serde"] }
+awc = { version = "3.0", default-features = false, features = ["rustls"] }
 
 [profile.release]
 codegen-units = 1
